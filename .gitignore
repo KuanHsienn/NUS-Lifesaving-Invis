@@ -1,0 +1,12 @@
+# Ignore Team_Line_Ups folder entirely (if present)
+/Team_Line_Ups/
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore Office temporary/lock files
+~$*.xls*
+*.tmp
+
