@@ -58,10 +58,9 @@ INVIS CODE/
 ### Required packages
 
 ```bash
-pip install pandas xlsxwriter python-pptx pywin32
+pip install -r requirements.txt
 ```
 
-(You can also create a `requirements.txt` with these packages.)
 
 ### Running the automation
 
