@@ -7,7 +7,7 @@ def parse_program_booklet(script_dir, output_dir):
     program_files = [f for f in glob.glob(os.path.join(script_dir, "*.xlsx")) 
                      if "programme" in os.path.basename(f).lower()]
     if not program_files: 
-        print("⚠️ No program booklet found.")
+        print("No program booklet found.")
         return []
 
     booklet = pd.ExcelFile(program_files[0])
@@ -179,5 +179,5 @@ def parse_program_booklet(script_dir, output_dir):
 
                     worksheet.write_formula(i+1, idx_pts, points_formula, num_format)
 
-    print(f"✅ Master List with Live Formulas created: {output_path}")
+    print(f"Master List with Live Formulas created: {output_path}")
     return master_rows

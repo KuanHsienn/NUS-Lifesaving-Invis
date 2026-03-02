@@ -17,7 +17,7 @@ def process_registrations(script_dir, output_dir, div_code_map, special_team_she
 
     # --- Data Ingestion Phase ---
     for excel_path in input_files:
-        print(f"📄 Processing Registration: {os.path.basename(excel_path)}")
+        print(f"Processing Registration: {os.path.basename(excel_path)}")
         xls = pd.ExcelFile(excel_path)
 
         # Extract Team Code
@@ -55,7 +55,7 @@ def process_registrations(script_dir, output_dir, div_code_map, special_team_she
     output_path = os.path.join(output_dir, "Parsed_Event_List.xlsx")
     _save_to_excel(output_path, team_member_registry, event_participants, ordered_event_names)
     
-    print(f"✅ Registration processing complete. File saved to: {output_path}")
+    print(f"Registration processing complete. File saved to: {output_path}")
     return event_participants, team_member_registry, ordered_event_names
 
 def _save_to_excel(output_path, registry, participants, ordered_names):

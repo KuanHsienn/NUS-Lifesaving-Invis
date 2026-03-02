@@ -23,7 +23,7 @@ def generate_event_results(script_dir, output_dir):
                if "invitational" in os.path.basename(f).lower()]
     
     if not matches:
-        print("⚠️ No Invitational results found.")
+        print("No Invitational results found.")
         return
 
     df_raw = pd.read_excel(matches[0])
@@ -123,4 +123,4 @@ def generate_event_results(script_dir, output_dir):
             worksheet.set_column(13, 13, 18)
             worksheet.set_column(14, 14, 10) 
 
-    print(f"✅ Results Generated using Dynamic Indexing: {output_path}")
+    print(f"Results Generated using Dynamic Indexing: {output_path}")

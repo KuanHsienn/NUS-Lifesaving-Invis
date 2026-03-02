@@ -27,8 +27,6 @@ SPECIAL_SHEETS = {
 }
 
 def main():
-    print("🚀 Starting Automation Process...")
-
     print("\n--- STEP 1: REGISTERING ALL TEAMS ---")
     participants, registry, event_order = process_registrations(
         SCRIPT_DIR, OUTPUT_DIR, DIV_MAP, SPECIAL_SHEETS

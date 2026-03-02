@@ -22,21 +22,21 @@ def generate_certificates(script_dir, output_dir):
         
     template_path = os.path.join(script_dir, "certificate_template.pptx")
     if not os.path.exists(template_path):
-        print(f"⚠️ Template not found at {template_path}. Skipping Certs.")
+        print(f"Template not found at {template_path}. Skipping Certs.")
         return
 
     matches = [f for f in glob.glob(os.path.join(script_dir, "*.xlsx")) 
                if "volunteers" in os.path.basename(f).lower()]
     
     if not matches:
-        print("⚠️ No 'volunteers.xlsx' found for certificate generation.")
+        print("No 'volunteers.xlsx' found for certificate generation.")
         return
 
     df = pd.read_excel(matches[0], header=None, names=["Name"])
     df["Name"] = df["Name"].str.strip()
     df = df.dropna(subset=["Name"]).drop_duplicates(subset="Name")
 
-    print("🎨 Opening PowerPoint for PDF export...")
+    print("Opening PowerPoint for PDF export...")
     powerpoint = win32com.client.Dispatch("PowerPoint.Application")
 
     try:
@@ -70,8 +70,8 @@ def generate_certificates(script_dir, output_dir):
                 time.sleep(0.5)
 
                 os.remove(pptx_path)
-                print(f"✅ Generated PDF for: {single_name}")
+                print(f"Generated PDF for: {single_name}")
 
     finally:
         powerpoint.Quit()
-        print("🎉 Certificate generation complete.")
+        print("Certificate generation complete.")
