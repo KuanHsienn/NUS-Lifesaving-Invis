@@ -18,15 +18,21 @@ def parse_final_backend_timing(value):
             return value.strip().upper()
         return pd.NaT
 
-def generate_event_results(script_dir, output_dir):
-    matches = [f for f in glob.glob(os.path.join(script_dir, "*.xlsx")) 
-               if "invitational" in os.path.basename(f).lower()]
-    
+def generate_event_results(script_dir, output_dir, year=None):
+    matches = sorted([
+        f for f in glob.glob(os.path.join(script_dir, "*.xlsx"))
+        if "invitational" in os.path.basename(f).lower()
+        and "results" in os.path.basename(f).lower()
+        and (str(year) in os.path.basename(f) if year else True)
+    ])
+
     if not matches:
-        print("No Invitational results found.")
+        print(f"  No {'%d' % year if year else 'Invitational'} results file found.")
         return
 
-    df_raw = pd.read_excel(matches[0])
+    chosen = matches[-1]
+    print(f"  Using: {os.path.basename(chosen)}")
+    df_raw = pd.read_excel(chosen)
     df_raw.columns = [str(c).strip() for c in df_raw.columns]
 
     # --- DYNAMIC COLUMN FINDER ---
@@ -35,7 +41,7 @@ def generate_event_results(script_dir, output_dir):
 
     # Map indices dynamically
     idx_name = get_col("Competitor Name")
-    idx_no   = get_col("Competitor No.")
+    idx_no   = df_raw.columns.get_loc("Competitor No.") if "Competitor No." in df_raw.columns else None
     idx_team = get_col("Team")
     idx_div  = get_col("Div")
     idx_heat = get_col("Heat No.")
@@ -59,8 +65,9 @@ def generate_event_results(script_dir, output_dir):
             is_valid = group["Final Backend Timing"].apply(lambda x: isinstance(x, pd.Timedelta))
             ranked = pd.concat([group[is_valid].sort_values("Final Backend Timing"), group[~is_valid]], ignore_index=True)
             
-            sheet_name = str(event_code)[:31]
-            event_name_text = str(ranked.iloc[0, idx_ev_n]).upper()
+            event_name_raw  = str(ranked.iloc[0, idx_ev_n]).strip()
+            event_name_text = event_name_raw.upper()
+            sheet_name      = event_name_text[:31]
             is_serc = "SIMULATED EMERGENCY RESPONSE COMPETITION" in event_name_text
 
             worksheet = workbook.add_worksheet(sheet_name)
@@ -86,7 +93,7 @@ def generate_event_results(script_dir, output_dir):
                 pos = i + 1
                 
                 raw_pts = row.iloc[idx_pts]
-                competitor_no = row.iloc[idx_no]
+                competitor_no = row.iloc[idx_no] if idx_no is not None else ""
                 
                 display_pts = "-" if pd.isna(raw_pts) else raw_pts
 
@@ -98,7 +105,7 @@ def generate_event_results(script_dir, output_dir):
                     worksheet.set_row(excel_row, 30)
                 else:
                     swim_data = [
-                        row.iloc[idx_no], 
+                        (row.iloc[idx_no] if idx_no is not None else ""),
                         row.iloc[idx_team], 
                         row.iloc[idx_div],
                         row.iloc[idx_heat], 
@@ -123,4 +130,4 @@ def generate_event_results(script_dir, output_dir):
             worksheet.set_column(13, 13, 18)
             worksheet.set_column(14, 14, 10) 
 
-    print(f"Results Generated using Dynamic Indexing: {output_path}")
+    print(f"  Event results saved -> {output_path}")

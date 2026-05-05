@@ -20,17 +20,21 @@ def process_registrations(script_dir, output_dir, div_code_map, special_team_she
         print(f"Processing Registration: {os.path.basename(excel_path)}")
         xls = pd.ExcelFile(excel_path)
 
-        # Extract Team Code
-        team_code_cell = str(xls.parse("Event list", header=None).iloc[7, 2])
-        match = re.search(r"\((\w{3})\)", team_code_cell)
-        team_code = match.group(1) if match else "UNK"
+        # Extract Team Code — scan column C for first cell containing a (XXX) 3-letter code
+        event_list_df = xls.parse("Event list", header=None)
+        team_code = "UNK"
+        for val in event_list_df.iloc[:, 2].astype(str):
+            m = re.search(r"\((\w{3})\)", val)
+            if m:
+                team_code = m.group(1)
+                break
 
         # Map Event Codes and maintain Order
-        if not event_map_global: 
-            event_df = xls.parse("Event list", skiprows=1, usecols=[0, 1])
+        if not event_map_global:
+            event_df = event_list_df.iloc[1:, [0, 1]]
             for _, row in event_df.iterrows():
                 code, name = str(row.iloc[0]).strip(), str(row.iloc[1]).strip()
-                if code.startswith("E"):
+                if re.match(r"^E\d+$", code):
                     event_map_global[code] = name
                     if name not in ordered_event_names:
                         ordered_event_names.append(name)
@@ -54,9 +58,9 @@ def process_registrations(script_dir, output_dir, div_code_map, special_team_she
 
     output_path = os.path.join(output_dir, "Parsed_Event_List.xlsx")
     _save_to_excel(output_path, team_member_registry, event_participants, ordered_event_names)
-    
+
     print(f"Registration processing complete. File saved to: {output_path}")
-    return event_participants, team_member_registry, ordered_event_names
+    return event_participants, team_member_registry, ordered_event_names, event_map_global
 
 def _save_to_excel(output_path, registry, participants, ordered_names):
     div_priority = {'Y': 0, 'B': 1, 'A': 2, 'O': 3}
@@ -175,4 +179,5 @@ def get_or_create_pk(name, group_key, registry, counter, div_code):
         pk = f"{group_key[0]}{group_key[1]}{group_key[2]}{counter[group_key]:02d}"
         registry[name] = pk
         return pk
+    print(f"Warning: participant limit reached for {group_key} — '{name}' not registered")
     return None
