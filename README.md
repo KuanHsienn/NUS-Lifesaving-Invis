@@ -1,96 +1,134 @@
-# 🏊‍♂️ NUS Invitational Lifesaving Automation
+# NUS Invitational Lifesaving Championship — Pipeline
 
-A modular Python automation suite designed to process championship registrations, parse programme booklets, generate dynamic event results, and export personalized certificates.
-
----
-
-## 🚀 Features
-
-- **Dynamic Column Discovery** 🔎
-
-  - Scans Excel headers (e.g., `"Competitor No."`, `"Final Timing"`) to find columns by name rather than fixed letters, making the parsers robust to layout changes.
-
-- **Intelligent Result Ranking** 🧠
-
-  - **Swimming events**: averages multiple timings and ranks competitors by speed automatically.
-  - **SERC events**: detects `"Simulated Emergency Response Competition"` and switches to a points-based ranking system.
-  - **Validation rules**: flags rows as "Verified" only when both timing and position are present.
-
-- **Professional Excel Formatting** ✨
-
-  - Merges cells for multi-line competitor names for readability.
-  - Dynamically adjusts row heights based on number of participants (newline counts in competitor IDs).
-  - Displays missing points as `-` for a clean output.
-
-- **Certificate Automation** 🎓
-  - Replaces `{{name}}` placeholders in PPTX templates and exports to PDF via PowerPoint COM (win32com).
-  - Uses explicit garbage collection, COM object deletion, and short delays to safely remove temporary PPTX files on Windows.
+A Python automation suite that handles team registration, heat seeding, programme booklet generation, live results parsing, and certificate export for the NUS Invitational Lifesaving Championship.
 
 ---
 
-## 📁 Project Structure
+## Pipeline Overview
 
-```text
+The pipeline runs in five sequential steps controlled by `main.py`:
+
+| Step  | Purpose                                             | When to run              |
+| ----- | --------------------------------------------------- | ------------------------ |
+| **0** | Update master seed from previous year's results     | After each championship  |
+| **1** | Parse team line-up files, register all participants | Before each championship |
+| **2** | Generate seeded programme booklet                   | Before each championship |
+| **3** | Parse filled-in programme booklet → master list     | After the event          |
+| **4** | Generate final ranked results                       | After the event          |
+
+---
+
+## Project Structure
+
+```
 INVIS CODE/
-├── data/                       # Input files (Excel datasets & PPTX templates)
-├── Final_Reports/              # Generated outputs (Master Lists, Results, PDFs)
+├── Data/                           # Input files
+│   ├── Master_Seed_Timing.xlsx     # Cumulative historical seed times (auto-managed)
+│   ├── NUS Invitational ... Results.xlsx   # Previous/current year results
+│   └── <Year> Programme Booklet.xlsx       # Filled-in booklet (post-event)
+├── Final_Reports/                  # All generated outputs
+│   ├── Parsed_Event_List.xlsx      # Registered participants per event
+│   ├── Seeded_Programme_Booklet.xlsx
+│   ├── Program_Master_List.xlsx    # Timing entry sheet with live formulas
+│   └── Event_Results_Final.xlsx
+├── Team_Line_Ups/                  # TeamLineUp Excel files from each institution
 ├── processors/
-│   ├── registration.py         # Team registration and participant mapping
-│   ├── booklet.py              # Parsing heats/lanes with dynamic column logic
-│   ├── results.py              # Result ranking, points calculation & formatting
-│   └── certificates.py         # PPTX generation and PDF export
-├── Team_Line_Ups/              # Holds team registration forms
+│   ├── registration.py             # Team registration and participant mapping
+│   ├── heat_seeding.py             # Master seed I/O and seeded booklet generation
+│   ├── booklet.py                  # Post-event booklet parsing
+│   └── results.py                  # Final results ranking and formatting
 ├── utils/
-│   └── helpers.py              # regex, time formatting and shared utilities
-├── main.py
-└── README.md
+│   └── helpers.py                  # Shared utilities (event type detection, gender codes)
+├── main.py                         # Pipeline controller
+└── requirements.txt
 ```
 
 ---
 
-## 🛠️ Setup & Usage
+## Setup
 
-### Prerequisites
-
-- **Python 3.12+**
-- **Microsoft PowerPoint** (required only for PPTX->PDF export using COM on Windows)
-
-### Required packages
+**Requirements:** Python 3.12+
 
 ```bash
 pip install -r requirements.txt
 ```
 
+---
 
-### Running the automation
+## Configuration (`main.py`)
 
-1. Drop source files into the `data/` folder (e.g., `2025 Programme Booklet.xlsx`, `volunteers.xlsx`, `certificate_template.pptx`).
-2. Run the main controller:
+```python
+CHAMPIONSHIP_YEAR = 2025        # Year of the current championship
+                                # Step 0 uses results from < this year for seeding
+                                # Step 4 looks for results from this year
 
-```bash
-python main.py
+DIV_MAP = {                     # Maps division labels in the TeamLineUp files
+    "DIVISION A": "A",          # to single-letter codes used throughout the pipeline
+    "DIVISION B": "B",
+    "DIVISION OPEN": "O",
+    "DIVISION YOUTH": "Y"
+}
+
+SPECIAL_SHEETS = {              # TeamLineUp sheet names that don't follow the
+    "MIXED POOL LIFESAVER RELAY_DIVA": "Mixed Pool Lifesaver Relay",  # standard layout
+    "MIXED POOL LIFESAVER RELAY_DIVB": "Mixed Pool Lifesaver Relay",
+    "MIXED POOL LIFESAVER RELAY_OPEN": "Mixed Pool Lifesaver Relay",
+    "SERC": "SERC"
+}
 ```
 
-Outputs (master lists, event results, PDFs) will be saved into `Final_Reports/`.
+In `heat_seeding.py`:
+
+```python
+SHOW_SEED_TIMES = True          # Shows historical seed times in the SEED column.
+                                # Comment out before printing the final booklet.
+```
 
 ---
 
-## ⚙️ Configuration
+## Input File Requirements
 
-- The main controller exposes two simple mapping utilities in `main.py`:
-  - `DIV_MAP` — handle division naming conventions
-  - `SPECIAL_SHEETS` — map sheet names for special events
+### TeamLineUp files (`Team_Line_Ups/`)
 
-These allow you to adapt the system to new input conventions without touching parser logic.
+- Filename must contain `"TeamLineUp"`.
+- Must have an `"Event list"` sheet with event codes (`E1`, `E2`, ...) in column A and event names in column B.
+- Institution team code must appear as a 3-letter code in parentheses (e.g., `(NUS)`) somewhere in column C of the `"Event list"` sheet.
+- Each event sheet row marks participation with `"X"` in the relevant column.
 
-> ⚠️ Note: The PPTX->PDF conversion uses `win32com` and therefore only runs on Windows with PowerPoint installed. If running on Linux/macOS, the certificate-generation step will still produce PPTX files but cannot convert them to PDF automatically.
+### Results file (`Data/`)
+
+- Filename must contain both `"invitational"` and `"results"` (case-insensitive).
+- Must include the year (e.g., `2025`) in the filename.
+- Must have a `"Bout Timings"` sheet with columns: `Event Name`, `Competitor Name`, `Team`, `Div`, `Final Backend Timing`.
+
+### Programme booklet (`Data/`)
+
+- Filename must contain `"programme"` (case-insensitive).
+- Sheet names must match the event names used in registration.
 
 ---
 
-## 🧩 Implementation Notes
+## Master Seed
 
-- Parsers do not rely on fixed Excel columns; they locate headers at runtime for resilience.
-- Result calculation is modular: adding a new event type is a matter of defining a ranking strategy and registering it with the results processor.
-- The certificate pipeline: generate PPTX -> use PowerPoint COM to export PDF -> delete temporary PPTX after ensuring handles have been released (`gc.collect()` + `time.sleep()` + `del` on COM objects).
+`Data/Master_Seed_Timing.xlsx` is the cumulative record of historical best times used for lane seeding.
+
+- **Individual events**: keyed by `(Event Name, Competitor Name)` — stores each athlete's personal best.
+- **Relay/team events**: keyed by `(Event Name, '<TEAM> <DIV>')`, e.g. `NUS A` — stores the institution's fastest relay time per division.
+- Only updated if the new time is strictly faster than the existing record.
+- Carries forward across years — never overwritten, only appended/updated.
+
+**Seeding logic:**
+
+- All divisions sorted Y → B → A → O; within each division, unseeded first then slowest → fastest.
+- Heats distributed equally across the full field (no per-division imbalance).
+- Within each heat: fastest → centre lane (lane 4 in a 10-lane pool), spiralling outward `[4,5,3,6,2,7,1,8,0,9]`.
 
 ---
+
+## Adding a New Event
+
+1. Add the event code and name to the `"Event list"` sheet in the TeamLineUp file.
+2. Mark participating athletes with `"X"` in the corresponding column.
+3. If it is a relay/team event whose name does not contain `relay`, `line`, `emergency`, `throw`, or `serc`, add the keyword to `is_team_event()` in `utils/helpers.py`.
+
+No other code changes are required.
