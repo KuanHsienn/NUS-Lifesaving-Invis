@@ -51,6 +51,8 @@ def generate_certificates(script_dir, output_dir):
                 pdf_path = os.path.join(cert_output_dir, f"{safe_name}_CERT.pdf")
 
                 if os.path.exists(pdf_path):
+                    if os.path.exists(pptx_path):
+                        os.remove(pptx_path)
                     continue
 
                 prs = Presentation(template_path)
@@ -59,18 +61,18 @@ def generate_certificates(script_dir, output_dir):
 
                 abs_pptx = os.path.abspath(pptx_path)
                 abs_pdf = os.path.abspath(pdf_path)
-                
-                pres = powerpoint.Presentations.Open(abs_pptx, WithWindow=False)
-                pres.SaveAs(abs_pdf, 32)  
-                pres.Close()
-                
-                del pres
-                gc.collect()
 
-                time.sleep(0.5)
-
-                os.remove(pptx_path)
-                print(f"Generated PDF for: {single_name}")
+                try:
+                    pres = powerpoint.Presentations.Open(abs_pptx, WithWindow=False)
+                    pres.SaveAs(abs_pdf, 32)
+                    pres.Close()
+                    del pres
+                    gc.collect()
+                    time.sleep(0.5)
+                    print(f"Generated PDF for: {single_name}")
+                finally:
+                    if os.path.exists(pptx_path):
+                        os.remove(pptx_path)
 
     finally:
         powerpoint.Quit()
