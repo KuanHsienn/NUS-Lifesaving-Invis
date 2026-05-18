@@ -62,20 +62,52 @@ def process_registrations(script_dir, output_dir, div_code_map, special_team_she
         for e in entries:
             k = (e["Inst"], e["Div"])
             max_blocks[k] = max(max_blocks.get(k, 1), e.get("Block", 1))
-    for ev_name, entries in event_participants.items():
+    for _, entries in event_participants.items():
         for e in entries:
             k = (e["Inst"], e["Div"])
             if max_blocks.get(k, 1) > 1 and e.get("Div", "").upper() != "O":
                 e["Inst"] = f"{e['Inst']}{e.get('Block', 1)}"
-                if is_team_event(ev_name):
-                    e["Team"] = e["Inst"]
             e.pop("Block", None)
+
+    _validate_team_sizes(event_participants)
 
     output_path = os.path.join(output_dir, "Parsed_Event_List.xlsx")
     _save_to_excel(output_path, team_member_registry, event_participants, ordered_event_names)
 
     print(f"Registration processing complete. File saved to: {output_path}")
     return event_participants, team_member_registry, ordered_event_names, event_map_global
+
+def _validate_team_sizes(event_participants):
+    m_relay = re.compile(r"(\d+)[xX]", re.IGNORECASE)
+    violations = []
+
+    for event_name, entries in event_participants.items():
+        if not is_team_event(event_name):
+            continue
+        m = m_relay.search(event_name)
+        if m:
+            expected = int(m.group(1))
+        elif any(kw in event_name.lower() for kw in ["line", "throw"]):
+            expected = 2
+        else:
+            continue  # SERC / other non-sized team events
+
+        groups = defaultdict(list)
+        for e in entries:
+            groups[(e["Inst"], e["Div"], e["Team"])].append(e)
+
+        for (inst, div, team), members in groups.items():
+            if len(members) != expected:
+                violations.append(
+                    f"  {event_name} | {inst} {div} team={team}: "
+                    f"expected {expected}, got {len(members)}"
+                )
+
+    if violations:
+        print("\n[REGISTRATION ERROR] Incorrect team sizes:")
+        for v in violations:
+            print(v)
+        raise ValueError("Fix team sizes in the lineup sheets before proceeding.")
 
 def _save_to_excel(output_path, registry, participants, ordered_names):
     div_priority = {'Y': 0, 'B': 1, 'A': 2, 'O': 3}
@@ -167,7 +199,8 @@ def process_regular_sheet(df, team_code, div_code, gender_code, event_map, regis
                 if e_name and is_team_event(e_name):
                     base_key = (e_name, team_code, div_code, raw_event_code)
                     group_counters[base_key] += 1
-                    current_group[base_key] = f"{team_code}{group_counters[base_key]}"
+                    code_suffix = raw_event_code[len(clean_event_code(raw_event_code)):]
+                    current_group[base_key] = f"{team_code}{group_counters[base_key]}{code_suffix}"
             continue
 
         name = df.iloc[row_idx, 2]

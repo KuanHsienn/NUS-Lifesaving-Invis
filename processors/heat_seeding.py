@@ -152,7 +152,7 @@ def update_master_seeds_from_results(results_path: str, master_seed_path: str) -
         if is_team_event(event_name):
             # One entry per institution+division — fastest relay time for that team
             # Strip sub-team suffix (NUS1/NUS2 → NUS) so seeds stay keyed by base inst
-            base_team = re.sub(r'\d+$', '', team)
+            base_team = re.sub(r'\d+.*$', '', team)
             comp_name = f"{base_team} {div}"
         else:
             comp_name = str(row.get("Competitor Name", "")).strip().upper()
@@ -498,7 +498,7 @@ def build_seed_df(event_name: str, raw_participants: list,
             inst_div_count[(inst, div)] = inst_div_count.get((inst, div), 0) + 1
 
         for (inst, div, n), data in teams.items():
-            base_inst = re.sub(r'\d+$', '', inst.strip())
+            base_inst = re.sub(r'\d+.*$', '', inst.strip())
             relay_key = f"{base_inst.strip().upper()} {div.strip().upper()}"
             secs, display = lookup_seed(relay_key, df_master_event)
             display_team = f"{inst}{n}" if (inst_div_count[(inst, div)] > 1 and div.upper() != "O") else inst
