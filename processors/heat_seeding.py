@@ -151,7 +151,9 @@ def update_master_seeds_from_results(results_path: str, master_seed_path: str) -
 
         if is_team_event(event_name):
             # One entry per institution+division — fastest relay time for that team
-            comp_name = f"{team} {div}"
+            # Strip sub-team suffix (NUS1/NUS2 → NUS) so seeds stay keyed by base inst
+            base_team = re.sub(r'\d+$', '', team)
+            comp_name = f"{base_team} {div}"
         else:
             comp_name = str(row.get("Competitor Name", "")).strip().upper()
             if not comp_name or comp_name == "NAN":
@@ -385,7 +387,9 @@ def allocate_event_heats(df_seeds: pd.DataFrame,
             take = min(fill, len(o_entries) - o_idx)
             heat.extend(o_entries[o_idx: o_idx + take])
             o_idx += take
-    while o_idx < len(o_entries):          # safety: overflow to last heat
+    while o_idx < len(o_entries):          # overflow: open a new heat if last is full
+        if len(heat_lists[-1]) >= pool_lanes:
+            heat_lists.append([])
         heat_lists[-1].append(o_entries[o_idx])
         o_idx += 1
 
@@ -466,14 +470,43 @@ def build_seed_df(event_name: str, raw_participants: list,
             teams[key]["members"].append(p.get("Competitor", ""))
             teams[key]["nos"].append(p.get("No.", ""))
 
+        # Infer team size from event name e.g. "4X50M" → 4, default 4
+        m = re.search(r"(\d+)[xX]", event_name)
+        team_size = int(m.group(1)) if m else 4
+
+        # Auto-split any group whose members exceed team_size (handles Excel
+        # sheets where two relay teams sit in one block without a separator row)
+        split_teams: dict = {}
+        split_counters: dict = {}
         for (inst, div, _), data in teams.items():
-            relay_key = f"{inst.strip().upper()} {div.strip().upper()}"
+            chunks = [data["members"][i:i + team_size]
+                      for i in range(0, len(data["members"]), team_size)]
+            nos_chunks = [data["nos"][i:i + team_size]
+                          for i in range(0, len(data["nos"]), team_size)]
+            for members, nos in zip(chunks, nos_chunks):
+                split_counters[(inst, div)] = split_counters.get((inst, div), 0) + 1
+                n = split_counters[(inst, div)]
+                split_teams[(inst, div, n)] = {
+                    "members": members, "nos": nos,
+                    "inst": inst, "div": div, "n": n,
+                }
+        teams = split_teams
+
+        # Count final teams per inst+div for label decision
+        inst_div_count: dict = {}
+        for (inst, div, _), data in teams.items():
+            inst_div_count[(inst, div)] = inst_div_count.get((inst, div), 0) + 1
+
+        for (inst, div, n), data in teams.items():
+            base_inst = re.sub(r'\d+$', '', inst.strip())
+            relay_key = f"{base_inst.strip().upper()} {div.strip().upper()}"
             secs, display = lookup_seed(relay_key, df_master_event)
+            display_team = f"{inst}{n}" if (inst_div_count[(inst, div)] > 1 and div.upper() != "O") else inst
             rows.append({
                 "Competitor Name": " / ".join(data["members"]),
                 "Competitor No.":  "\n".join(data["nos"]),
-                "Team":            data["inst"],
-                "Div":             data["div"],
+                "Team":            display_team,
+                "Div":             div,
                 "Best Seconds":    secs,
                 "Best Time":       display,
             })

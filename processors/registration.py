@@ -54,7 +54,22 @@ def process_registrations(script_dir, output_dir, div_code_map, special_team_she
             if sheet in special_team_sheets:
                 process_special_sheet(df, sheet, team_code, div_code, special_team_sheets, team_member_registry, primary_key_counter, event_participants)
             else:
-                process_regular_sheet(df, sheet, team_code, div_code, gender_code, event_map_global, team_member_registry, primary_key_counter, event_participants)
+                process_regular_sheet(df, team_code, div_code, gender_code, event_map_global, team_member_registry, primary_key_counter, event_participants)
+
+    # Relabel Inst to e.g. NUS1/NUS2 for orgs with multiple non-O blocks per div
+    max_blocks = {}
+    for entries in event_participants.values():
+        for e in entries:
+            k = (e["Inst"], e["Div"])
+            max_blocks[k] = max(max_blocks.get(k, 1), e.get("Block", 1))
+    for ev_name, entries in event_participants.items():
+        for e in entries:
+            k = (e["Inst"], e["Div"])
+            if max_blocks.get(k, 1) > 1 and e.get("Div", "").upper() != "O":
+                e["Inst"] = f"{e['Inst']}{e.get('Block', 1)}"
+                if is_team_event(ev_name):
+                    e["Team"] = e["Inst"]
+            e.pop("Block", None)
 
     output_path = os.path.join(output_dir, "Parsed_Event_List.xlsx")
     _save_to_excel(output_path, team_member_registry, event_participants, ordered_event_names)
@@ -125,10 +140,10 @@ def process_special_sheet(df, sheet, team_code, div_code, special_team_sheets, r
         if pd.isna(name) or str(name).strip().lower() == "name": continue
         name = str(name).strip().upper()
         
-        pk = get_or_create_pk(name, (team_code, "X", div_code), registry, counter, div_code)
+        pk = get_or_create_pk(name, (team_code, "X", div_code), registry, counter)
         if not pk: continue
 
-        current_team.append({"Competitor": name, "No.": pk, "Inst": team_code, "Div": div_code, "Team": f"{sheet}_T{team_counter}"})
+        current_team.append({"Competitor": name, "No.": pk, "Inst": team_code, "Div": div_code, "Team": f"{team_code}{team_counter}", "Block": team_counter})
         if len(current_team) == 4:
             participants[event_name].extend(current_team)
             current_team = []
@@ -136,28 +151,30 @@ def process_special_sheet(df, sheet, team_code, div_code, special_team_sheets, r
     if current_team: 
         participants[event_name].extend(current_team)
 
-def process_regular_sheet(df, sheet, team_code, div_code, gender_code, event_map, registry, counter, participants):
+def process_regular_sheet(df, team_code, div_code, gender_code, event_map, registry, counter, participants):
     events = df.iloc[3, 1:]
-    open_group_counters = defaultdict(int)
-    open_current_group = {}
+    group_counters = defaultdict(int)
+    current_group = {}
+    current_block = 0
 
     for row_idx in range(3, len(df)):
         first_four = [str(df.iloc[row_idx, i]).strip().lower() for i in range(1, 5)]
         if first_four == ["no.", "name", "date of birth", "bm ref no."]:
+            current_block += 1
             for col_idx in range(1, len(events)+1):
                 raw_event_code = str(df.iloc[3, col_idx]).replace(" ", "")
                 e_name = event_map.get(clean_event_code(raw_event_code))
-                if e_name and is_team_event(e_name) and div_code == "O":
+                if e_name and is_team_event(e_name):
                     base_key = (e_name, team_code, div_code, raw_event_code)
-                    open_group_counters[base_key] += 1
-                    open_current_group[base_key] = f"{raw_event_code}_G{open_group_counters[base_key]}"
+                    group_counters[base_key] += 1
+                    current_group[base_key] = f"{team_code}{group_counters[base_key]}"
             continue
 
         name = df.iloc[row_idx, 2]
         if pd.isna(name): continue
         name = str(name).strip().upper()
 
-        pk = get_or_create_pk(name, (team_code, gender_code, div_code), registry, counter, div_code)
+        pk = get_or_create_pk(name, (team_code, gender_code, div_code), registry, counter)
         if not pk: continue
 
         for col_idx in range(5, len(events)+1):
@@ -167,17 +184,14 @@ def process_regular_sheet(df, sheet, team_code, div_code, gender_code, event_map
                 if not e_name: continue
 
                 group_id = raw_event_code
-                if is_team_event(e_name) and div_code == "O":
-                    group_id = open_current_group.get((e_name, team_code, div_code, raw_event_code), f"{raw_event_code}_FB")
+                if is_team_event(e_name):
+                    group_id = current_group.get((e_name, team_code, div_code, raw_event_code), f"{team_code}1")
 
-                participants[e_name].append({"Competitor": name, "No.": pk, "Inst": team_code, "Div": div_code, "Team": group_id})
+                participants[e_name].append({"Competitor": name, "No.": pk, "Inst": team_code, "Div": div_code, "Team": group_id, "Block": max(current_block, 1)})
 
-def get_or_create_pk(name, group_key, registry, counter, div_code):
+def get_or_create_pk(name, group_key, registry, counter):
     if name in registry: return registry[name]
-    if div_code == "O" or counter[group_key] < 6:
-        counter[group_key] += 1
-        pk = f"{group_key[0]}{group_key[1]}{group_key[2]}{counter[group_key]:02d}"
-        registry[name] = pk
-        return pk
-    print(f"Warning: participant limit reached for {group_key} — '{name}' not registered")
-    return None
+    counter[group_key] += 1
+    pk = f"{group_key[0]}{group_key[1]}{group_key[2]}{counter[group_key]:02d}"
+    registry[name] = pk
+    return pk

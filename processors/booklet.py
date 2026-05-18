@@ -39,7 +39,7 @@ def parse_program_booklet(script_dir, output_dir):
         current_heat, capture_rows = "H1", False
         cols = {}
 
-        for idx, row in df.iterrows():
+        for _, row in df.iterrows():
             row_str = [str(c).strip().lower() for c in row]
             # Heat Detection: Reset capture_rows to False to wait for the next header
             for cell in row:
@@ -56,7 +56,11 @@ def parse_program_booklet(script_dir, output_dir):
             # Row Data Capture
             if capture_rows and not all(pd.isna(c) for c in row):
                 name = str(row[cols['competitors']]).strip()
-                if not name or name.lower() == "competitors" or not name.isupper(): 
+                if not name or name.lower() == "competitors" or name.lower() == "nan":
+                    continue
+                # Skip rows where every ASCII letter is lowercase (e.g. header bleed-through)
+                ascii_letters = [c for c in name if c.isascii() and c.isalpha()]
+                if ascii_letters and not all(c.isupper() for c in ascii_letters):
                     continue
                 row_is_serc = "SIMULATED EMERGENCY RESPONSE COMPETITION" in event_name.upper()
 
